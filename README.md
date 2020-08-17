@@ -4,7 +4,7 @@
 
 lewisxhe's AXP202X library is ESP-IDF compatible, but i didn't noticed. So i publish this, but **highly recommend you to use his original work.**
 
-This is a pure C port of the C++ code, which can be used as a component for ESP-IDF. Nothing has been added, and very much was removed.
+This is a pure C port of the C++ code, which can be used as a component for ESP-IDF. Nothing has been added, and very little was removed.
 
 ## STILL TESTING
 
