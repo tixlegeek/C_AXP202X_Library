@@ -1,0 +1,20 @@
+menu "AXP202 Configuration"
+
+    config AXP202_I2C_SDA
+        int "I2c SDA GPIO."
+        default 21
+        help
+            The SDA line of the i2c bus.
+
+    config AXP202_I2C_SCL
+        int "I2c SCL GPIO."
+        default 22
+        help
+            The SCL line of the i2c bus.
+
+    config AXP202_I2C_NUM
+        int "I2c port"
+        default 0
+        help
+            The i2c port of the bus.
+endmenu

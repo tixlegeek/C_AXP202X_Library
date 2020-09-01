@@ -56,14 +56,23 @@ github:https://github.com/lewisxhe/AXP202X_Libraries
 #define AXP173_SLAVE_ADDRESS (0x34)
 
 #define AXP202_I2C_ADDRESS AXP202_SLAVE_ADDRESS
-#define AXP202_I2C_NUM I2C_NUM_0
-#define AXP202_SDA_PIN GPIO_NUM_21
-#define AXP202_SCL_PIN GPIO_NUM_22
 
-#ifdef AXP_DEBUG_PORT
-#define AXP_DEBUG(fmt, ...) AXP_DEBUG_PORT.printf_P((PGM_P)PSTR(fmt), ##__VA_ARGS__)
+#ifndef CONFIG_AXP202_I2C_SDA
+  #define AXP202_SDA_PIN GPIO_NUM_21
 #else
-#define AXP_DEBUG(...)
+  #define AXP202_SDA_PIN CONFIG_AXP202_I2C_SDA
+#endif
+
+#ifndef CONFIG_AXP202_I2C_SCL
+  #define AXP202_SCL_PIN GPIO_NUM_22
+#else
+  #define AXP202_SCL_PIN CONFIG_AXP202_I2C_SCL
+#endif
+
+#ifndef CONFIG_AXP202_I2C_NUM
+  #define AXP202_I2C_NUM I2C_NUM_0
+#else
+  #define AXP202_I2C_NUM CONFIG_AXP202_I2C_NUM
 #endif
 
 #ifndef RISING
@@ -765,7 +774,7 @@ typedef enum {
     int axpxx_setChargeControlCur(uint16_t mA);
 
     int axpxx_setGpioInterrupt(uint8_t *val, int mode, bool en);
-    int _axp_probe();
+    int axpxx_probe();
     int _axpxx_irq_mask(axp_gpio_irq_t irq);
 
     int _axp192_gpio_set(axp_gpio_t gpio, axp_gpio_mode_t mode);
@@ -783,10 +792,12 @@ typedef enum {
     int _axp202_gpio_write(axp_gpio_t gpio, uint8_t val);
     int _axp202_gpio_read(axp_gpio_t gpio);
     void axpxx_i2c_init();
+    void axp202_init();
+
 
     extern const uint8_t axpxx_startupParams[], axpxx_longPressParams[], axpxx_shutdownParams[], axpxx_targetVolParams[];
     extern uint8_t axpxx_irq[5];
     extern uint8_t axpxx_chip_id;
     extern bool axpxx_init;
-    
+
 #endif

@@ -1,9 +1,9 @@
 /////////////////////////////////////////////////////////////////
 /*
 
-    pure C port por ESP-IDF - @tixlegeek - tixlegeek.io
-    10/08/20 - https://github.com/tixlegeek/C_AXP202X_Library
-    Original Header:
+pure C port por ESP-IDF - @tixlegeek - tixlegeek.io
+10/08/20 - https://github.com/tixlegeek/C_AXP202X_Library
+Original Header:
 
 --------------------------------------------------------------------------------
 
@@ -93,6 +93,8 @@ uint16_t _getRegistResult(uint8_t regh8, uint8_t regl4)
 
 void axpxx_i2c_init()
 {
+  ESP_LOGW(TAG, "InitI2C");
+  int i2c_master_port = AXP202_I2C_NUM;
   i2c_config_t i2c_config = {
     .mode = I2C_MODE_MASTER,
     .sda_io_num = AXP202_SDA_PIN,
@@ -103,12 +105,36 @@ void axpxx_i2c_init()
   };
   esp_err_t res;
 
-  ESP_LOGD(TAG, "Setting up I2C");
-  res = i2c_param_config(I2C_NUM_0, &i2c_config);
+  ESP_LOGW(TAG, "Setting up I2C");
+  res = i2c_param_config(i2c_master_port, &i2c_config);
   assert(res == ESP_OK);
-  res = i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0);
+  res = i2c_driver_install(i2c_master_port, I2C_MODE_MASTER, 0, 0, 0);
   assert(res == ESP_OK);
 
+
+}
+
+void axp202_init()
+{
+  ESP_LOGW(TAG, "Probing axp...");
+  axpxx_probe();
+  ESP_LOGW(TAG, "Init AXP");
+  axpxx_setPowerOutPut(AXP202_LDO2, AXP202_OFF);
+  vTaskDelay(100);
+  axpxx_setPowerOutPut(AXP202_LDO2, AXP202_ON);
+  axpxx_setShutdownTime(AXP_POWER_OFF_TIME_4S);
+  // Turn off the charging instructions, there should be no
+  axpxx_setChgLEDMode(AXP20X_LED_OFF);
+  // Turn off external enable
+  axpxx_setPowerOutPut(AXP202_EXTEN, false);
+  //axp202 allows maximum charging current of 1800mA, minimum 300mA
+  axpxx_setChargeControlCur(300);
+  axpxx_adc1Enable(AXP202_BATT_VOL_ADC1 | AXP202_BATT_CUR_ADC1 | AXP202_VBUS_VOL_ADC1 | AXP202_VBUS_CUR_ADC1, AXP202_ON);
+  //axpxx_enableIRQ(AXP202_VBUS_REMOVED_IRQ | AXP202_VBUS_CONNECT_IRQ | AXP202_CHARGING_FINISHED_IRQ, AXP202_ON);
+/*  axpxx_setPowerOutPut(AXP202_EXTEN, AXP202_OFF);
+  axpxx_setPowerOutPut(AXP202_DCDC2, AXP202_OFF);
+  axpxx_setPowerOutPut(AXP202_LDO3, AXP202_OFF);
+  axpxx_setPowerOutPut(AXP202_LDO4, AXP202_OFF);*/
 }
 
 void axpxx_readByte(uint8_t reg, uint8_t nbytes, uint8_t *data)
@@ -142,6 +168,7 @@ void axpxx_writeByte(uint8_t reg, uint8_t nbytes, uint8_t *data)
   //  i2c_master_start(cmd);
   i2c_master_write_byte(cmd, *data, true);
   i2c_master_stop(cmd);
+
   espErr = i2c_master_cmd_begin(AXP202_I2C_NUM, cmd, 10/portTICK_PERIOD_MS);
   assert(espErr==ESP_OK);
   i2c_cmd_link_delete(cmd);
@@ -150,7 +177,7 @@ void axpxx_writeByte(uint8_t reg, uint8_t nbytes, uint8_t *data)
 // Power Output Control register
 uint8_t axpxx_outputReg;
 
-int axpxx__axp_probe()
+int axpxx_probe()
 {
   uint8_t data;
   if (IS_AXP173) {
@@ -161,16 +188,16 @@ int axpxx__axp_probe()
     }
     axpxx_chip_id = AXP173_CHIP_ID;
     axpxx_readByte(AXP202_LDO234_DC23_CTL, 1, &axpxx_outputReg);
-    AXP_DEBUG("OUTPUT Register 0x%x\n", axpxx_outputReg);
+    ESP_LOGW(TAG, "OUTPUT Register 0x%x\n", axpxx_outputReg);
     axpxx_init = true;
     return AXP_PASS;
   }
   axpxx_readByte(AXP202_IC_TYPE, 1, &axpxx_chip_id);
-  AXP_DEBUG("chip id detect 0x%x\n", axpxx_chip_id);
+  ESP_LOGW(TAG, "chip id detect 0x%x\n", axpxx_chip_id);
   if (axpxx_chip_id == AXP202_CHIP_ID || axpxx_chip_id == AXP192_CHIP_ID) {
-    AXP_DEBUG("Detect CHIP :%s\n", axpxx_chip_id == AXP202_CHIP_ID ? "AXP202" : "AXP192");
+    ESP_LOGW(TAG, "Detect CHIP :%s\n", axpxx_chip_id == AXP202_CHIP_ID ? "AXP202" : "AXP192");
     axpxx_readByte(AXP202_LDO234_DC23_CTL, 1, &axpxx_outputReg);
-    AXP_DEBUG("OUTPUT Register 0x%x\n", axpxx_outputReg);
+    ESP_LOGW(TAG, "OUTPUT Register 0x%x\n", axpxx_outputReg);
     axpxx_init = true;
     return AXP_PASS;
   }
@@ -277,6 +304,7 @@ int axpxx_setPowerOutPut(uint8_t ch, bool en)
 
   //! Axp173 cannot use the REG12H register to control
   //! DC2 and EXTEN. It is necessary to control REG10H separately.
+  ESP_LOGW(TAG,"Set Power Output: %x  \n", ch);
   if (axpxx_chip_id == AXP173_CHIP_ID) {
     axpxx_readByte(AXP173_EXTEN_DC2_CTL, 1, &data);
     if (ch & AXP173_DCDC2) {
@@ -291,6 +319,7 @@ int axpxx_setPowerOutPut(uint8_t ch, bool en)
   }
 
   axpxx_readByte(AXP202_LDO234_DC23_CTL, 1, &data);
+  ESP_LOGW(TAG,"data: %x  \n", data);
   if (en) {
     data |= (1 << ch);
   } else {
@@ -298,16 +327,19 @@ int axpxx_setPowerOutPut(uint8_t ch, bool en)
   }
 
   if (axpxx_chip_id == AXP202_CHIP_ID) {
+    ESP_LOGW(TAG,"FORCE OPEN : %x  \n", data);
     FORCED_OPEN_DCDC3(data); //! Must be forced open in T-Watch
   }
 
   axpxx_writeByte(AXP202_LDO234_DC23_CTL, 1, &data);
   vTaskDelay(1 / portTICK_PERIOD_MS);
   axpxx_readByte(AXP202_LDO234_DC23_CTL, 1, &val);
+
   if (data == val) {
     axpxx_outputReg = val;
     return AXP_PASS;
   }
+  ESP_LOGW(TAG,"data: %x  \n", val);
   return AXP_FAIL;
 }
 
@@ -664,7 +696,7 @@ int axpxx_enableIRQ(uint64_t params, bool en)
     val |= val1;
     else
     val &= ~(val1);
-    AXP_DEBUG("%s [0x%x]val:0x%x\n", en ? "enable" : "disable", AXP202_INTEN1, val);
+    ESP_LOGW(TAG, "%s [0x%x]val:0x%x\n", en ? "enable" : "disable", AXP202_INTEN1, val);
     axpxx_writeByte(AXP202_INTEN1, 1, &val);
   }
   if (params & 0xFF00) {
@@ -674,7 +706,7 @@ int axpxx_enableIRQ(uint64_t params, bool en)
     val |= val1;
     else
     val &= ~(val1);
-    AXP_DEBUG("%s [0x%x]val:0x%x\n", en ? "enable" : "disable", AXP202_INTEN2, val);
+    ESP_LOGW(TAG, "%s [0x%x]val:0x%x\n", en ? "enable" : "disable", AXP202_INTEN2, val);
     axpxx_writeByte(AXP202_INTEN2, 1, &val);
   }
 
@@ -685,7 +717,7 @@ int axpxx_enableIRQ(uint64_t params, bool en)
     val |= val1;
     else
     val &= ~(val1);
-    AXP_DEBUG("%s [0x%x]val:0x%x\n", en ? "enable" : "disable", AXP202_INTEN3, val);
+    ESP_LOGW(TAG, "%s [0x%x]val:0x%x\n", en ? "enable" : "disable", AXP202_INTEN3, val);
     axpxx_writeByte(AXP202_INTEN3, 1, &val);
   }
 
@@ -696,7 +728,7 @@ int axpxx_enableIRQ(uint64_t params, bool en)
     val |= val1;
     else
     val &= ~(val1);
-    AXP_DEBUG("%s [0x%x]val:0x%x\n", en ? "enable" : "disable", AXP202_INTEN4, val);
+    ESP_LOGW(TAG, "%s [0x%x]val:0x%x\n", en ? "enable" : "disable", AXP202_INTEN4, val);
     axpxx_writeByte(AXP202_INTEN4, 1, &val);
   }
 
@@ -707,7 +739,7 @@ int axpxx_enableIRQ(uint64_t params, bool en)
     val |= val1;
     else
     val &= ~(val1);
-    AXP_DEBUG("%s [0x%x]val:0x%x\n", en ? "enable" : "disable", AXP202_INTEN5, val);
+    ESP_LOGW(TAG, "%s [0x%x]val:0x%x\n", en ? "enable" : "disable", AXP202_INTEN5, val);
     axpxx_writeByte(AXP202_INTEN5, 1, &val);
   }
   return AXP_PASS;
@@ -853,11 +885,11 @@ int axpxx_setDCDC2Voltage(uint16_t mv)
   if (!axpxx_init)
   return AXP_NOT_INIT;
   if (mv < 700) {
-    AXP_DEBUG("DCDC2:Below settable voltage:700mV~2275mV");
+    ESP_LOGW(TAG, "DCDC2:Below settable voltage:700mV~2275mV");
     mv = 700;
   }
   if (mv > 2275) {
-    AXP_DEBUG("DCDC2:Above settable voltage:700mV~2275mV");
+    ESP_LOGW(TAG, "DCDC2:Above settable voltage:700mV~2275mV");
     mv = 2275;
   }
   uint8_t val = (mv - 700) / 25;
@@ -890,11 +922,11 @@ int axpxx_setDCDC3Voltage(uint16_t mv)
   return AXP_NOT_INIT;
   if (axpxx_chip_id == AXP173_CHIP_ID)return AXP_NOT_SUPPORT;
   if (mv < 700) {
-    AXP_DEBUG("DCDC3:Below settable voltage:700mV~3500mV");
+    ESP_LOGW(TAG, "DCDC3:Below settable voltage:700mV~3500mV");
     mv = 700;
   }
   if (mv > 3500) {
-    AXP_DEBUG("DCDC3:Above settable voltage:700mV~3500mV");
+    ESP_LOGW(TAG, "DCDC3:Above settable voltage:700mV~3500mV");
     mv = 3500;
   }
   uint8_t val = (mv - 700) / 25;
@@ -908,11 +940,11 @@ int axpxx_setLDO2Voltage(uint16_t mv)
   if (!axpxx_init)
   return AXP_NOT_INIT;
   if (mv < 1800) {
-    AXP_DEBUG("LDO2:Below settable voltage:1800mV~3300mV");
+    ESP_LOGW(TAG, "LDO2:Below settable voltage:1800mV~3300mV");
     mv = 1800;
   }
   if (mv > 3300) {
-    AXP_DEBUG("LDO2:Above settable voltage:1800mV~3300mV");
+    ESP_LOGW(TAG, "LDO2:Above settable voltage:1800mV~3300mV");
     mv = 3300;
   }
   wVal = (mv - 1800) / 100;
@@ -942,7 +974,7 @@ uint16_t axpxx_getLDO2Voltage()
     return rVal * 100 + 1800;
   } else if (axpxx_chip_id == AXP192_CHIP_ID || axpxx_chip_id == AXP173_CHIP_ID ) {
     axpxx_readByte(AXP192_LDO23OUT_VOL, 1, &rVal);
-    AXP_DEBUG("get result:%x\n", rVal);
+    ESP_LOGW(TAG, "get result:%x\n", rVal);
     rVal &= 0xF0;
     rVal >>= 4;
     return rVal * 100 + 1800;
@@ -956,18 +988,18 @@ int axpxx_setLDO3Voltage(uint16_t mv)
   if (!axpxx_init)
   return AXP_NOT_INIT;
   if (axpxx_chip_id == AXP202_CHIP_ID && mv < 700) {
-    AXP_DEBUG("LDO3:Below settable voltage:700mV~3500mV");
+    ESP_LOGW(TAG, "LDO3:Below settable voltage:700mV~3500mV");
     mv = 700;
   } else if (axpxx_chip_id == AXP192_CHIP_ID && mv < 1800) {
-    AXP_DEBUG("LDO3:Below settable voltage:1800mV~3300mV");
+    ESP_LOGW(TAG, "LDO3:Below settable voltage:1800mV~3300mV");
     mv = 1800;
   }
 
   if (axpxx_chip_id == AXP202_CHIP_ID && mv > 3500) {
-    AXP_DEBUG("LDO3:Above settable voltage:700mV~3500mV");
+    ESP_LOGW(TAG, "LDO3:Above settable voltage:700mV~3500mV");
     mv = 3500;
   } else if (axpxx_chip_id == AXP192_CHIP_ID && mv > 3300) {
-    AXP_DEBUG("LDO3:Above settable voltage:1800mV~3300mV");
+    ESP_LOGW(TAG, "LDO3:Above settable voltage:1800mV~3300mV");
     mv = 3300;
   }
 
@@ -1018,11 +1050,11 @@ if (axpxx_chip_id != AXP173_CHIP_ID)
 return AXP_FAIL;
 
 if (mv < 700) {
-AXP_DEBUG("LDO4:Below settable voltage:700mV~3500mV");
+ESP_LOGW(TAG, "LDO4:Below settable voltage:700mV~3500mV");
 mv = 700;
 }
 if (mv > 3500) {
-AXP_DEBUG("LDO4:Above settable voltage:700mV~3500mV");
+ESP_LOGW(TAG, "LDO4:Above settable voltage:700mV~3500mV");
 mv = 3500;
 }
 uint8_t val = (mv - 700) / 25;
@@ -1163,7 +1195,7 @@ float axpxx_getSettingChargeCurrent()
   axpxx_readByte(AXP202_CHARGE1, 1, &val);
   val &= 0b00000111;
   float cur = 300.0 + val * 100.0;
-  AXP_DEBUG("Setting Charge current : %.2f mA\n", cur);
+  ESP_LOGW(TAG, "Setting Charge current : %.2f mA\n", cur);
   return cur;
 }
 
@@ -1174,10 +1206,10 @@ bool axpxx_isChargeingEnable()
   return false;
   axpxx_readByte(AXP202_CHARGE1, 1, &val);
   if (val & (1 << 7)) {
-    AXP_DEBUG("Charging enable is enable\n");
+    ESP_LOGW(TAG, "Charging enable is enable\n");
     val = true;
   } else {
-    AXP_DEBUG("Charging enable is disable\n");
+    ESP_LOGW(TAG, "Charging enable is disable\n");
     val = false;
   }
   return val;
@@ -1256,20 +1288,20 @@ int axpxx_debugCharging()
 {
   uint8_t val;
   axpxx_readByte(AXP202_CHARGE1, 1, &val);
-  AXP_DEBUG("SRC REG:0x%x\n", val);
+  ESP_LOGW(TAG, "SRC REG:0x%x\n", val);
   if (val & (1 << 7)) {
-    AXP_DEBUG("Charging enable is enable\n");
+    ESP_LOGW(TAG, "Charging enable is enable\n");
   } else {
-    AXP_DEBUG("Charging enable is disable\n");
+    ESP_LOGW(TAG, "Charging enable is disable\n");
   }
-  AXP_DEBUG("Charging target-voltage : 0x%x\n", ((val & 0b01100000) >> 5) & 0b11);
+  ESP_LOGW(TAG, "Charging target-voltage : 0x%x\n", ((val & 0b01100000) >> 5) & 0b11);
   if (val & (1 << 4)) {
-    AXP_DEBUG("end when the charge current is lower than 15%% of the set value\n");
+    ESP_LOGW(TAG, "end when the charge current is lower than 15%% of the set value\n");
   } else {
-    AXP_DEBUG(" end when the charge current is lower than 10%% of the set value\n");
+    ESP_LOGW(TAG, " end when the charge current is lower than 10%% of the set value\n");
   }
   val &= 0b00000111;
-  AXP_DEBUG("Charge current : %.2f mA\n", 300.0 + val * 100.0);
+  ESP_LOGW(TAG, "Charge current : %.2f mA\n", 300.0 + val * 100.0);
   return AXP_PASS;
 }
 
@@ -1281,8 +1313,8 @@ int axpxx_debugStatus()
   axpxx_readByte(AXP202_STATUS, 1, &val);
   axpxx_readByte(AXP202_MODE_CHGSTATUS, 1, &val1);
   axpxx_readByte(AXP202_IPS_SET, 1, &val2);
-  AXP_DEBUG("AXP202_STATUS:   AXP202_MODE_CHGSTATUS   AXP202_IPS_SET\n");
-  AXP_DEBUG("0x%x\t\t\t 0x%x\t\t\t 0x%x\n", val, val1, val2);
+  ESP_LOGW(TAG, "AXP202_STATUS:   AXP202_MODE_CHGSTATUS   AXP202_IPS_SET\n");
+  ESP_LOGW(TAG, "0x%x\t\t\t 0x%x\t\t\t 0x%x\n", val, val1, val2);
   return AXP_PASS;
 }
 
@@ -1309,11 +1341,11 @@ int axpxx_setDCDC1Voltage(uint16_t mv)
   if (axpxx_chip_id != AXP192_CHIP_ID && axpxx_chip_id != AXP173_CHIP_ID)
   return AXP_FAIL;
   if (mv < 700) {
-    AXP_DEBUG("DCDC1:Below settable voltage:700mV~3500mV");
+    ESP_LOGW(TAG, "DCDC1:Below settable voltage:700mV~3500mV");
     mv = 700;
   }
   if (mv > 3500) {
-    AXP_DEBUG("DCDC1:Above settable voltage:700mV~3500mV");
+    ESP_LOGW(TAG, "DCDC1:Above settable voltage:700mV~3500mV");
     mv = 3500;
   }
   uint8_t val = (mv - 700) / 25;
